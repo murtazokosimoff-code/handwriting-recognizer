@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Распознавание рукописного текста</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            margin: 0;
+            padding: 16px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 1.5rem;
+            color: #1f2937;
+        }
+        .note {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 0.85rem;
+            text-align: left;
+            border-radius: 8px;
+        }
+        video, canvas {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 16px;
+            margin: 10px auto;
+            display: block;
+            border: 1px solid #ccc;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            border-radius: 40px;
+            margin: 8px;
+            cursor: pointer;
+        }
+        button:active {
+            background: #1d4ed8;
+        }
+        #result {
+            background: white;
+            padding: 16px;
+            border-radius: 16px;
+            text-align: left;
+            margin-top: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .status {
+            font-size: 0.8rem;
+            color: #4b5563;
+            margin: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>📝 Распознавание рукописного текста</h1>
+    <div class="note">
+        ⚠️ <strong>Важно:</strong> Это демо-версия. Рукописный текст распознаётся с ошибками.<br>
+        ✅ Для лучшего результата используйте <strong>Microsoft Lens</strong> или <strong>Pen to Print</strong>.
+    </div>
+
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+    <div>
+        <button id="captureBtn">📸 Сделать фото и распознать</button>
+    </div>
+    <div id="result">
+        👆 Нажмите на кнопку, сфотографируйте текст.
+    </div>
+    <div class="status" id="status"></div>
+
+    <!-- Подключаем Tesseract.js для распознавания -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureBtn = document.getElementById('captureBtn');
+        const resultDiv = document.getElementById('result');
+        const statusDiv = document.getElementById('status');
+
+        // Запрашиваем доступ к камере
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                video.srcObject = stream;
+                statusDiv.innerText = '✅ Камера готова. Наведите на текст и нажмите кнопку.';
+            } catch (err) {
+                statusDiv.innerText = '❌ Ошибка доступа к камере: ' + err.message;
+                console.error(err);
+            }
+        }
+
+        // Сделать снимок и распознать
+        captureBtn.addEventListener('click', async () => {
+            if (!video.videoWidth) {
+                statusDiv.innerText = '❌ Камера не запущена. Разрешите доступ.';
+                return;
+            }
+
+            // Рисуем текущий кадр на canvas
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Показываем пользователю, что процесс пошёл
+            resultDiv.innerText = '🔍 Распознаю текст... (может занять 5-10 секунд)';
+            statusDiv.innerText = '⏳ Идёт обработка...';
+
+            // Получаем изображение с canvas
+            const imageData = canvas.toDataURL('image/jpeg', 0.8);
+
+            // Распознаём через Tesseract.js (язык русский + английский)
+            try {
+                const worker = await Tesseract.createWorker({
+                    logger: m => console.log(m) // прогресс в консоль (необязательно)
+                });
+                await worker.loadLanguage('rus+eng');
+                await worker.initialize('rus+eng');
+                const { data: { text } } = await worker.recognize(imageData);
+                await worker.terminate();
+
+                if (text && text.trim().length > 0) {
+                    resultDiv.innerText = '📖 Распознанный текст:\n\n' + text;
+                    statusDiv.innerText = '✅ Готово. Помните, что точность для рукописного текста ограничена.';
+                } else {
+                    resultDiv.innerText = '❌ Текст не найден. Попробуйте снова: чёткий почерк, хорошее освещение.';
+                    statusDiv.innerText = '⚠️ Распознавание не дало результата.';
+                }
+            } catch (err) {
+                resultDiv.innerText = '❌ Ошибка распознавания: ' + err.message;
+                statusDiv.innerText = '❌ Попробуйте перезагрузить страницу.';
+                console.error(err);
+            }
+        });
+
+        // Запускаем камеру при загрузке
+        initCamera();
+    </script>
+</body>
+</html>
